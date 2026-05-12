@@ -211,9 +211,21 @@ function App(){
     setError('');setPhase('analyzing');
     setLoadingStep('Lendo print...');
     try{
-      const b64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.onerror=()=>rej(new Error('Erro ao ler arquivo'));r.readAsDataURL(file);});
+      // Convert to base64 safely
+      const b64=await new Promise((res,rej)=>{
+        const r=new FileReader();
+        r.onload=()=>{
+          const result=r.result;
+          const base64=result.substring(result.indexOf(',')+1);
+          res(base64);
+        };
+        r.onerror=()=>rej(new Error('Erro ao ler arquivo'));
+        r.readAsDataURL(file);
+      });
+      // Force jpeg media type - most compatible
+      const mediaType='image/jpeg';
       setLoadingStep('IA analisando imagem...');
-      const resp=await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:600,messages:[{role:'user',content:[{type:'image',source:{type:'base64',media_type:file.type||'image/jpeg',data:b64}},{type:'text',text:'Este é um print da tela de Estatísticas de uma roleta ao vivo (aba Últimas 500). Extraia todos os números visíveis nos quadradinhos. Leia da esquerda para direita, de cima para baixo. O canto superior esquerdo é o mais antigo. Retorne SOMENTE este JSON sem texto adicional: {"numeros":[3,21,12,24,19,5]}'}]}]})});
+      const resp=await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:800,messages:[{role:'user',content:[{type:'image',source:{type:'base64',media_type:mediaType,data:b64}},{type:'text',text:'Você está vendo uma tela de estatísticas de roleta ao vivo. Há uma grade de quadradinhos com números de 0 a 36. Extraia TODOS os números dessa grade. Leia da esquerda para direita, de cima para baixo. Responda APENAS com este JSON exato, sem explicações: {"numeros":[3,21,12,24,19,5,13,4,28,19,5,23,13,9,5,23,13,4,28,19]}'}]}]})});
       setLoadingStep('Processando números...');
       const data=await resp.json();
       if(data.error)throw new Error(data.error.message||'Erro na API');
