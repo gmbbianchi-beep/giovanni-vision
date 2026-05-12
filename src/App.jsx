@@ -182,7 +182,7 @@ export default function AppWrapper(){
 }
 
 function App(){
-  const [phase,setPhase]=useState('upload'); // upload | analyzing | ready
+  const [phase,setPhase]=useState('ready'); // ready always
   const [timeline,setTimeline]=useState([]);
   const [analysis,setAnalysis]=useState(null);
   const [optimized,setOptimized]=useState(null);
@@ -212,18 +212,15 @@ function App(){
     setLoadingStep('Lendo print...');
     try{
       // Convert to base64 safely
-      const b64=await new Promise((res,rej)=>{
-        const r=new FileReader();
-        r.onload=()=>{
-          const result=r.result;
-          const base64=result.substring(result.indexOf(',')+1);
-          res(base64);
-        };
-        r.onerror=()=>rej(new Error('Erro ao ler arquivo'));
-        r.readAsDataURL(file);
+      // Detect correct media type from base64 header
+      const dataUrl = await new Promise((res,rej)=>{
+        const r2=new FileReader();
+        r2.onload=()=>res(r2.result);
+        r2.onerror=()=>rej(new Error('Erro'));
+        r2.readAsDataURL(file);
       });
-      // Force jpeg media type - most compatible
-      const mediaType='image/jpeg';
+      const mediaType = dataUrl.split(';')[0].split(':')[1] || 'image/png';
+      const b64 = dataUrl.substring(dataUrl.indexOf(',')+1);
       setLoadingStep('IA analisando imagem...');
       const resp=await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:800,messages:[{role:'user',content:[{type:'image',source:{type:'base64',media_type:mediaType,data:b64}},{type:'text',text:'Você está vendo uma tela de estatísticas de roleta ao vivo. Há uma grade de quadradinhos com números de 0 a 36. Extraia TODOS os números dessa grade. Leia da esquerda para direita, de cima para baixo. Responda APENAS com este JSON exato, sem explicações: {"numeros":[3,21,12,24,19,5,13,4,28,19,5,23,13,9,5,23,13,4,28,19]}'}]}]})});
       setLoadingStep('Processando números...');
@@ -253,6 +250,13 @@ function App(){
       setRetryCount(0);setMissedNum(null);
       setPhase('ready');
     }catch(err){setError(err.message);setPhase('upload');}
+  };
+
+  const addNumToTimeline=(n)=>{
+    if(n<0||n>36)return;
+    const updated=[n,...timeline].slice(0,50);
+    setTimeline(updated);runFullAnalysis(updated);
+    setRetryCount(0);setMissedNum(null);
   };
 
   const addNum=()=>{
@@ -295,28 +299,7 @@ function App(){
           </div>
         </div>
 
-        {/* UPLOAD */}
-        {phase!=='ready'&&(
-          <>
-            <div onClick={()=>!loadingStep&&fileRef.current?.click()} style={{background:C.panel,border:`2px dashed ${loadingStep?C.dim:C.border}`,borderRadius:14,padding:loadingStep?'28px':'32px 20px',textAlign:'center',cursor:loadingStep?'default':'pointer',marginBottom:12}}>
-              {loadingStep?(
-                <>
-                  <div style={{width:40,height:40,border:`3px solid ${C.border}`,borderTopColor:C.green,borderRadius:'50%',margin:'0 auto 12px',animation:'spin 0.8s linear infinite'}}/>
-                  <div style={{fontSize:10,color:C.dim,letterSpacing:2}}>PROCESSANDO</div>
-                  <div style={{fontSize:10,color:C.green,marginTop:6}}>{loadingStep}</div>
-                </>
-              ):(
-                <>
-                  <div style={{fontSize:34,marginBottom:10}}>📸</div>
-                  <div style={{fontSize:17,fontWeight:700,color:C.white,marginBottom:6}}>Print dos 50 números</div>
-                  <div style={{fontSize:10,color:C.dim,letterSpacing:1}}>TOQUE AQUI · TELA DE ESTATÍSTICAS</div>
-                </>
-              )}
-            </div>
-            <input ref={fileRef} type="file" accept="image/*" style={{display:'none'}} onChange={e=>handleFile(e.target.files[0])}/>
-            {error&&<div style={{background:'#1a0810',border:`1px solid ${C.red}`,borderRadius:8,padding:'10px 12px',fontSize:11,color:'#ff8090',marginBottom:12}}>⚠ {error}</div>}
-          </>
-        )}
+
 
         {/* READY */}
         {phase==='ready'&&(
@@ -348,6 +331,18 @@ function App(){
                 <div><div style={{fontSize:11,color:C.red,fontWeight:900}}>❌ 2ª TENTATIVA NÃO BATEU</div><div style={{fontSize:10,color:'#b06070',marginTop:3}}>Desiste! Digite os <strong style={{color:C.white}}>2 números</strong> que saíram</div></div>
                 <button onClick={()=>{setRetryCount(0);setMissedNum(null);}} style={{fontSize:9,padding:'4px 8px',background:'transparent',border:`1px solid ${C.dim}`,borderRadius:5,color:C.dim,cursor:'pointer'}}>CANCELAR</button>
               </div>}
+            </div>
+
+            {/* NUMBER GRID */}
+            <div style={{background:C.panel,border:`1px solid ${C.border}`,borderRadius:12,padding:12,marginBottom:12}}>
+              <div style={{fontSize:8,color:C.dim,letterSpacing:2,marginBottom:8,textAlign:'center'}}>// TOQUE PARA ADICIONAR À TIMELINE</div>
+              <button onClick={()=>addNumToTimeline(0)} style={{display:'block',width:'100%',padding:'7px',background:'#082015',border:'1px solid #1a5030',borderRadius:7,color:C.green,fontFamily:'monospace',fontSize:14,fontWeight:'bold',cursor:'pointer',marginBottom:7,letterSpacing:2}}>— 0 —</button>
+              <div style={{display:'grid',gridTemplateColumns:'repeat(9,1fr)',gap:4}}>
+                {Array.from({length:36},(_,i)=>i+1).map(n=>(
+                  <button key={n} onClick={()=>addNumToTimeline(n)} style={{height:34,borderRadius:6,fontFamily:'monospace',fontSize:12,fontWeight:'bold',cursor:'pointer',border:'none',background:RED.has(n)?'#3a0a10':'#101010',color:RED.has(n)?'#ff8090':'#777',transition:'transform 0.1s'}}>{n}</button>
+                ))}
+              </div>
+              <button onClick={()=>{setTimeline([]);setAnalysis(null);setOptimized(null);setStratResults(null);}} style={{width:'100%',marginTop:8,padding:'6px',background:'transparent',border:`1px solid ${C.border}`,borderRadius:6,color:C.dim,fontSize:11,cursor:'pointer',letterSpacing:1}}>⌫ LIMPAR TIMELINE</button>
             </div>
 
             {/* Tabs */}
