@@ -218,11 +218,22 @@ function App(){
       const data=await resp.json();
       if(data.error)throw new Error(data.error.message||'Erro na API');
       const raw=(data.content||[]).map(x=>x.text||'').join('');
-      const match=raw.replace(/```[\s\S]*?```/g,'').match(/\{[\s\S]*?\}/);
-      if(!match)throw new Error('Não consegui ler os números. Tente um print mais nítido.');
-      const parsed=JSON.parse(match[0]);
+      // Try to extract JSON more aggressively
+      let parsed = null;
+      try {
+        const clean = raw.replace(/```[\s\S]*?```/g,'').replace(/`/g,'').trim();
+        const match = clean.match(/\{[\s\S]*\}/);
+        if (match) parsed = JSON.parse(match[0]);
+      } catch(e) {
+        // Try to extract numbers directly from text
+        const numMatches = raw.match(/\b([0-9]|[1-2][0-9]|3[0-6])\b/g);
+        if (numMatches && numMatches.length >= 5) {
+          parsed = { numeros: numMatches.map(Number) };
+        }
+      }
+      if (!parsed) throw new Error('Não consegui ler os números. Certifique que a tela de Estatísticas está visível com os quadradinhos.');
       const nums=(parsed.numeros||[]).filter(n=>typeof n==='number'&&n>=0&&n<=36);
-      if(nums.length<5)throw new Error(`Poucos números encontrados (${nums.length}). Certifique que os quadradinhos estão visíveis.`);
+      if(nums.length<5)throw new Error(`Poucos números encontrados (${nums.length}). Certifique que os quadradinhos estão visíveis na tela de Estatísticas.`);
       setLoadingStep('Rodando Monte Carlo...');
       const reversed=[...nums].reverse();
       setTimeline(reversed);
