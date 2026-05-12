@@ -1,5 +1,45 @@
 import { useState, useRef, useCallback } from "react";
 
+const SENHA_CORRETA = "Forra01";
+
+function TelaLogin({ onLogin }) {
+  const [senha, setSenha] = useState('');
+  const [erro, setErro] = useState(false);
+  const [shake, setShake] = useState(false);
+
+  const tentar = () => {
+    if (senha === SENHA_CORRETA) {
+      onLogin();
+    } else {
+      setErro(true);
+      setShake(true);
+      setSenha('');
+      setTimeout(() => setShake(false), 500);
+      setTimeout(() => setErro(false), 2000);
+    }
+  };
+
+  return (
+    <div style={{background:'#04080b',minHeight:'100vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'0 24px',fontFamily:"'Courier New',monospace"}}>
+      <div style={{position:'fixed',inset:0,backgroundImage:'linear-gradient(rgba(0,200,122,0.02) 1px,transparent 1px),linear-gradient(90deg,rgba(0,200,122,0.02) 1px,transparent 1px)',backgroundSize:'30px 30px',pointerEvents:'none'}}/>
+      <div style={{position:'relative',zIndex:1,width:'100%',maxWidth:340,textAlign:'center'}}>
+        <div style={{fontSize:48,marginBottom:16}}>🎰</div>
+        <div style={{fontSize:22,fontWeight:900,letterSpacing:4,color:'#e8f5ff',marginBottom:4}}>GIOVANNI <span style={{color:'#00c87a'}}>VISION</span></div>
+        <div style={{fontSize:9,color:'#2e4a60',letterSpacing:2,marginBottom:40}}>REVOLUTION · ACESSO RESTRITO</div>
+        <div style={{animation:shake?'shake 0.5s ease':'none'}}>
+          <input type="password" value={senha} onChange={e=>setSenha(e.target.value)} onKeyDown={e=>e.key==='Enter'&&tentar()} placeholder="Digite a senha..."
+            style={{width:'100%',background:'#080f14',border:`2px solid ${erro?'#d42035':'#132030'}`,borderRadius:10,padding:'14px 16px',color:'#e8f5ff',fontSize:16,fontFamily:'monospace',outline:'none',textAlign:'center',letterSpacing:2,marginBottom:12,transition:'border-color 0.3s'}}/>
+          <button onClick={tentar} style={{width:'100%',padding:'14px',background:'linear-gradient(135deg,#006040,#00c87a)',border:'none',borderRadius:10,color:'#000',fontWeight:900,fontSize:16,letterSpacing:3,cursor:'pointer'}}>ENTRAR</button>
+          {erro && <div style={{marginTop:12,fontSize:11,color:'#d42035',letterSpacing:1}}>⚠ SENHA INCORRETA</div>}
+        </div>
+      </div>
+      <style>{'@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}'}</style>
+    </div>
+  );
+}
+
+
+
 // ── ROULETTE ENGINE ───────────────────────────────────────────────
 const RED = new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
 const WHEEL = [0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
@@ -135,7 +175,13 @@ function analyze(nums,optimized){
 }
 
 // ── APP COMPONENT ─────────────────────────────────────────────────
-export default function App(){
+export default function AppWrapper(){
+  const [logado, setLogado] = useState(false);
+  if (!logado) return <TelaLogin onLogin={() => setLogado(true)} />;
+  return <App />;
+}
+
+function App(){
   const [phase,setPhase]=useState('upload'); // upload | analyzing | ready
   const [timeline,setTimeline]=useState([]);
   const [analysis,setAnalysis]=useState(null);
