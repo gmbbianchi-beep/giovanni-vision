@@ -74,6 +74,45 @@ const MIRRORS = {1:13,13:1,22:25,25:22,2:20,20:2,3:30,30:3,4:31,31:4,5:32,32:5,
   12:35,35:12,14:19,19:14,15:21,21:15,16:28,28:16,17:29,29:17,18:24,24:18};
 const HORSES = [[1,4,7],[2,5,8],[3,6,9]];
 
+// ── LEARNING SYSTEM ───────────────────────────────────────────────
+const STRAT_KEYS = ['perm','terminal','camuflagem','cavalo','espelho','tripleX','umaFicha','quebra'];
+const DEFAULT_WEIGHTS = {perm:1,terminal:1,camuflagem:1,cavalo:1,espelho:1,tripleX:1,umaFicha:1,quebra:1};
+
+function loadWeights() {
+  try {
+    const saved = localStorage.getItem('gv_weights');
+    return saved ? JSON.parse(saved) : {...DEFAULT_WEIGHTS};
+  } catch { return {...DEFAULT_WEIGHTS}; }
+}
+
+function saveWeights(w) {
+  try { localStorage.setItem('gv_weights', JSON.stringify(w)); } catch {}
+}
+
+function loadStats() {
+  try {
+    const saved = localStorage.getItem('gv_stats');
+    return saved ? JSON.parse(saved) : {total:0,first:0,second:0,miss:0,sessions:0};
+  } catch { return {total:0,first:0,second:0,miss:0,sessions:0}; }
+}
+
+function saveStats(s) {
+  try { localStorage.setItem('gv_stats', JSON.stringify(s)); } catch {}
+}
+
+function updateWeights(weights, activeStrategies, result) {
+  // result: 'first' | 'second' | 'miss'
+  const newW = {...weights};
+  const boost = result === 'first' ? 0.15 : result === 'second' ? 0.05 : -0.10;
+  activeStrategies.forEach(s => {
+    if (newW[s] !== undefined) {
+      newW[s] = Math.max(0.1, Math.min(3.0, newW[s] + boost));
+    }
+  });
+  saveWeights(newW);
+  return newW;
+}
+
 function wpos(n){return WHEEL.indexOf(n);}
 function nbrs(n,c){const p=wpos(n);if(p<0)return[];return Array.from({length:c*2+1},(_,i)=>WHEEL[(p-c+i+WHEEL.length)%WHEEL.length]);}
 function term(n){return n%10;}
@@ -194,6 +233,10 @@ function App(){
   const [loadingStep,setLoadingStep]=useState('');
   const [error,setError]=useState('');
   const [showConfirm,setShowConfirm]=useState(false);
+  const [weights,setWeights]=useState(()=>loadWeights());
+  const [stats,setStats]=useState(()=>loadStats());
+  const [lastStrategies,setLastStrategies]=useState([]);
+  const [showResult,setShowResult]=useState(false);
   const fileRef=useRef();
 
   const C={bg:'#04080b',panel:'#080f14',panel2:'#0c1820',border:'#132030',border2:'#1e3448',green:'#00c87a',gold:'#f5a800',red:'#d42035',blue:'#38bdf8',text:'#b8d8f0',dim:'#2e4a60',white:'#e8f5ff'};
@@ -204,6 +247,8 @@ function App(){
     const strat=testStrategies(nums);
     const res=analyze(nums,opt);
     setOptimized(opt);setStratResults(strat);setAnalysis(res);
+    if(res) setLastStrategies(res.hotStrategies||[]);
+    setShowResult(true);
   },[]);
 
   const handleFile=async(file)=>{
@@ -250,6 +295,20 @@ function App(){
       setRetryCount(0);setMissedNum(null);
       setPhase('ready');
     }catch(err){setError(err.message);setPhase('upload');}
+  };
+
+  const handleResult=(result)=>{
+    // Update weights based on result
+    const newW = updateWeights(weights, lastStrategies, result);
+    setWeights(newW);
+    // Update stats
+    const newStats = {...stats, total: stats.total+1};
+    if(result==='first') newStats.first = (stats.first||0)+1;
+    if(result==='second') newStats.second = (stats.second||0)+1;
+    if(result==='miss') newStats.miss = (stats.miss||0)+1;
+    saveStats(newStats);
+    setStats(newStats);
+    setShowResult(false);
   };
 
   const addNumToTimeline=(n)=>{
@@ -426,6 +485,18 @@ function App(){
                 )}
 
                 {retryCount===0&&<div style={{background:'#0a0a00',border:'1px solid #1a1a00',borderRadius:8,padding:'8px 12px',fontSize:10,color:'#888',lineHeight:1.6}}>🔁 <span style={{color:C.gold}}>REGRA:</span> Não bateu → <strong style={{color:C.gold}}>NÃO BATEU</strong> → repete · 2x → digita os 2 números</div>}
+
+                {/* RESULT FEEDBACK */}
+                {showResult && analysis?.semaforo !== 'red' && (
+                  <div style={{background:C.panel,border:`1px solid ${C.border}`,borderRadius:10,padding:12,marginTop:8}}>
+                    <div style={{fontSize:9,color:C.dim,letterSpacing:2,marginBottom:8,textAlign:'center'}}>// COMO FOI A JOGADA?</div>
+                    <div style={{display:'flex',gap:6}}>
+                      <button onClick={()=>handleResult('first')} style={{flex:1,padding:'10px 4px',background:'rgba(0,200,122,0.15)',border:'1px solid rgba(0,200,122,0.3)',borderRadius:8,color:C.green,fontSize:11,fontWeight:700,cursor:'pointer',letterSpacing:1}}>✅ BATEU<br/><span style={{fontSize:9,fontWeight:400}}>1ª vez</span></button>
+                      <button onClick={()=>handleResult('second')} style={{flex:1,padding:'10px 4px',background:'rgba(56,189,248,0.15)',border:'1px solid rgba(56,189,248,0.3)',borderRadius:8,color:C.blue,fontSize:11,fontWeight:700,cursor:'pointer',letterSpacing:1}}>🔄 BATEU<br/><span style={{fontSize:9,fontWeight:400}}>2ª vez</span></button>
+                      <button onClick={()=>handleResult('miss')} style={{flex:1,padding:'10px 4px',background:'rgba(212,32,53,0.15)',border:'1px solid rgba(212,32,53,0.3)',borderRadius:8,color:'#ff7090',fontSize:11,fontWeight:700,cursor:'pointer',letterSpacing:1}}>❌ NÃO<br/><span style={{fontSize:9,fontWeight:400}}>BATEU</span></button>
+                    </div>
+                  </div>
+                )}
               </>
             )}
 
@@ -526,6 +597,45 @@ function App(){
                 <div style={{background:'#080a04',border:'1px solid #1a2010',borderRadius:8,padding:'10px 12px',fontSize:10,color:'#6a8050',lineHeight:1.6,marginBottom:12}}>
                   💡 Monte Carlo testa <strong style={{color:C.green}}>centenas de combinações</strong> a cada número adicionado — sempre usando a melhor para aquela sessão.
                 </div>
+                {/* LEARNING STATS */}
+                <div style={{background:C.panel,border:`1px solid ${C.border}`,borderRadius:10,padding:12,marginBottom:10}}>
+                  <div style={{fontSize:9,color:C.dim,letterSpacing:2,marginBottom:10}}>// APRENDIZADO DO SISTEMA</div>
+                  <div style={{display:'flex',gap:6,marginBottom:10}}>
+                    <div style={{flex:1,background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:'8px 4px',textAlign:'center'}}>
+                      <div style={{fontSize:8,color:C.dim}}>TOTAL</div>
+                      <div style={{fontSize:18,fontWeight:900,color:C.white}}>{stats.total||0}</div>
+                    </div>
+                    <div style={{flex:1,background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:'8px 4px',textAlign:'center'}}>
+                      <div style={{fontSize:8,color:C.green}}>1ª VEZ</div>
+                      <div style={{fontSize:18,fontWeight:900,color:C.green}}>{stats.first||0}</div>
+                    </div>
+                    <div style={{flex:1,background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:'8px 4px',textAlign:'center'}}>
+                      <div style={{fontSize:8,color:C.blue}}>2ª VEZ</div>
+                      <div style={{fontSize:18,fontWeight:900,color:C.blue}}>{stats.second||0}</div>
+                    </div>
+                    <div style={{flex:1,background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:'8px 4px',textAlign:'center'}}>
+                      <div style={{fontSize:8,color:C.red}}>ERROS</div>
+                      <div style={{fontSize:18,fontWeight:900,color:C.red}}>{stats.miss||0}</div>
+                    </div>
+                  </div>
+                  <div style={{fontSize:9,color:C.dim,letterSpacing:2,marginBottom:8}}>PESOS DAS ESTRATÉGIAS</div>
+                  {Object.entries(weights).sort((a,b)=>b[1]-a[1]).map(([k,v])=>{
+                    const labels={perm:'Permanência',terminal:'Terminal',camuflagem:'Camuflagem',cavalo:'Cavalo',espelho:'Espelho',tripleX:'Triple X',umaFicha:'1 Ficha',quebra:'Quebra'};
+                    const pct=Math.round((v/3)*100);
+                    const color=v>=1.3?C.green:v>=0.8?C.text:C.red;
+                    return(
+                      <div key={k} style={{display:'flex',alignItems:'center',gap:8,marginBottom:5}}>
+                        <div style={{fontSize:10,color,width:80,flexShrink:0}}>{labels[k]}</div>
+                        <div style={{flex:1,height:4,background:'#0a0a0a',borderRadius:2,overflow:'hidden'}}>
+                          <div style={{height:'100%',width:`${pct}%`,background:color,borderRadius:2}}/>
+                        </div>
+                        <div style={{fontSize:10,fontWeight:900,color,width:30,textAlign:'right'}}>{v.toFixed(1)}</div>
+                      </div>
+                    );
+                  })}
+                  <button onClick={()=>{const w={...DEFAULT_WEIGHTS};saveWeights(w);setWeights(w);}} style={{width:'100%',marginTop:8,padding:'6px',background:'transparent',border:`1px solid ${C.dim}`,borderRadius:6,color:C.dim,fontSize:10,cursor:'pointer'}}>RESETAR PESOS</button>
+                </div>
+
                 <button onClick={()=>setShowConfirm(true)} style={{width:'100%',padding:10,background:'transparent',border:`1px solid ${C.red}`,borderRadius:8,color:C.red,fontSize:12,cursor:'pointer',letterSpacing:2}}>↺ NOVO PRINT</button>
                 {showConfirm&&<div style={{marginTop:8,background:'#1a0810',border:`1px solid ${C.red}`,borderRadius:8,padding:12,textAlign:'center'}}>
                   <div style={{fontSize:12,color:'#ff8090',marginBottom:10}}>Voltar para upload?</div>
