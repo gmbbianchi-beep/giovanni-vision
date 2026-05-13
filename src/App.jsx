@@ -288,18 +288,16 @@ function analyze(nums){
   const uniqueT=Object.keys(tc).length;
   const rc={T:0,V:0,O:0,Z:0};last14.forEach(n=>rc[region(n)]++);
   const topR=Object.entries(rc).sort((a,b)=>b[1]-a[1])[0];
-  const mesaOk=altPct<75&&uniqueT<8;
+  const mesaOk=!(altPct>=80&&uniqueT>=9); // só bloqueia se realmente caótica
 
-  // ── SEMÁFORO ─────────────────────────────────────────────────
-  // Verde: convergência forte (2+ estratégias no mesmo número)
-  // Amarelo: sinal moderado
-  // Vermelho: mesa caótica
+  // ── SEMÁFORO — SIMPLES E DIRETO ─────────────────────────────
   const topPts=entries[0]?.pts||0;
   const convergencia=entries[0]?.reasons?.length>=2;
   let sem='yellow';
-  if(!mesaOk){sem='red';}
-  else if(convergencia&&topPts>=8&&entries.length>=1){sem='green';}
-  else if(topPts>=5){sem='yellow';}
+  // Só vermelho se mesa MUITO caótica (9+ terminais únicos)
+  if(uniqueT>=9&&altPct>80){sem='red';}
+  else if(convergencia&&topPts>=8){sem='green';}
+  else{sem='yellow';} // sempre amarelo no mínimo
 
   // TX
   const tx=calcTX(nums);
@@ -587,8 +585,8 @@ function App(){
           </div>
         </div>}
 
-        {/* ENTRADAS PRINCIPAIS */}
-        {analysis.mesaOk&&waiting===0&&(analysis.sem==='green'||analysis.sem==='yellow')&&<>
+        {/* ENTRADAS PRINCIPAIS — sempre mostra */}
+        {waiting===0&&<>
           {analysis.entries.map((e,i)=>(<div key={i} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:10,padding:10,marginBottom:7,position:'relative',overflow:'hidden'}}>
             <div style={{position:'absolute',left:0,top:0,bottom:0,width:3,background:S[e.str].c}}/>
             <div style={{display:'flex',justifyContent:'space-between',marginBottom:7}}>
@@ -618,7 +616,7 @@ function App(){
         </>}
 
         {/* TRIPLE X — sempre visível */}
-        {analysis.mesaOk&&<div style={{background:C.bg,border:`1px solid ${C.gold}44`,borderRadius:10,padding:10,marginBottom:7}}>
+        {<div style={{background:C.bg,border:`1px solid ${C.gold}44`,borderRadius:10,padding:10,marginBottom:7}}>
           <div style={{fontSize:9,color:C.gold,letterSpacing:1,marginBottom:7,display:'flex',justifyContent:'space-between'}}>
             <span>⚡ TRIPLE X</span>
             <span style={{fontWeight:900}}>TX{analysis.txHot} mais quente 🔥</span>
@@ -650,7 +648,7 @@ function App(){
         </div>}
 
         {/* 1 FICHA SECA */}
-        {analysis.mesaOk&&<div style={{background:analysis.ufHot?'rgba(0,200,122,0.06)':C.bg,border:`1px solid ${analysis.ufHot?C.green+'66':C.blue+'44'}`,borderRadius:10,padding:10,marginBottom:7}}>
+        {<div style={{background:analysis.ufHot?'rgba(0,200,122,0.06)':C.bg,border:`1px solid ${analysis.ufHot?C.green+'66':C.blue+'44'}`,borderRadius:10,padding:10,marginBottom:7}}>
           {analysis.ufHot&&<div style={{fontSize:8,color:C.green,fontWeight:900,marginBottom:4}}>🔥 T{analysis.ufT} — TERMINAL QUENTE! (~11-17%)</div>}
           <div style={{display:'flex',alignItems:'center',gap:10}}>
             <div style={{width:42,height:42,borderRadius:'50%',background:analysis.ufHot?'rgba(0,200,122,0.2)':C.blue+'18',border:`2px solid ${analysis.ufHot?C.green:C.blue}66`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,fontWeight:900,color:analysis.ufHot?C.green:C.blue,flexShrink:0,boxShadow:analysis.ufHot?`0 0 12px ${C.green}44`:'none'}}>{analysis.umaFicha}</div>
@@ -662,7 +660,7 @@ function App(){
         </div>}
 
         {/* TERMINAL DOMINANTE */}
-        {analysis.mesaOk&&analysis.tDomCount>=3&&<div style={{background:C.bg,border:`1px solid ${C.blue}44`,borderRadius:10,padding:10,marginBottom:7}}>
+        {analysis.tDomCount>=3&&<div style={{background:C.bg,border:`1px solid ${C.blue}44`,borderRadius:10,padding:10,marginBottom:7}}>
           <div style={{fontSize:9,color:C.blue,fontWeight:900,marginBottom:6}}>🎯 T{analysis.tDom} DOMINANTE ({analysis.tDomCount}x) — 1V cada</div>
           <div style={{display:'flex',gap:5}}>
             {analysis.termNums.map((n,i)=>(
@@ -675,7 +673,7 @@ function App(){
         </div>}
 
         {/* ZERO PROTECTION */}
-        {analysis.zeroprot&&<div style={{background:'rgba(0,200,122,0.06)',border:`1px solid ${C.green}44`,borderRadius:8,padding:'8px 12px',marginBottom:7,display:'flex',alignItems:'center',gap:8}}>
+        {analysis.zeroprot&&waiting===0&&<div style={{background:'rgba(0,200,122,0.06)',border:`1px solid ${C.green}44`,borderRadius:8,padding:'8px 12px',marginBottom:7,display:'flex',alignItems:'center',gap:8}}>
           <div style={{width:28,height:28,borderRadius:'50%',background:'#082015',border:`1px solid ${C.green}`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:900,color:C.green}}>0</div>
           <div style={{fontSize:10,color:C.green}}>⚠️ Terminal saturado — 1 ficha no <strong>0</strong></div>
         </div>}
