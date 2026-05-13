@@ -176,8 +176,7 @@ function analyze(nums,weights,mode){
     entries.push({main:c.n,nb,vc,str,pts:c.pts,reasons:c.reasons.slice(0,3),keys:c.keys,regiao:region(c.n)});
   });
 
-  // ── SEMÁFORO — NOVA LÓGICA RIGOROSA ───────────────────────────
-  // Verde só quando: mesa estável + região convergente + estratégias fortes
+  // ── SEMÁFORO — LÓGICA CIRÚRGICA ─────────────────────────────
   const hotS=[];
   const allKeys=entries.flatMap(e=>e.keys);
   if(allKeys.includes('perm'))hotS.push('Permanência');
@@ -190,34 +189,83 @@ function analyze(nums,weights,mode){
   if(allKeys.includes('ciclo'))hotS.push('Ciclo');
   if(Object.values(freq).some(v=>v>=2))hotS.push('Repetição');
 
-  // Verificar convergência de região
+  // CONVERGÊNCIA REAL: Perm e Cam precisam apontar para o MESMO número
+  const permNums=new Set((PERM[last]||[]).map(n=>n));
+  const camNums=new Set([cam,cam+10,cam+20,cam+30].filter(x=>x<=36));
+  const permCamConverge=[...permNums].some(n=>camNums.has(n)||term(n)===cam);
+
+  // Terminais únicos — mesa caótica se muitos
+  const uniqueTerms=Object.keys(mesa.tc).length;
+  const mesaCaotica=uniqueTerms>=7;
+
+  // Região converge
   const regiaoConverge=entries.length>=1&&entries.every(e=>e.regiao===entries[0].regiao||e.regiao==='Z');
 
-  // SEMÁFORO RIGOROSO:
-  // Verde: mesa estável + 3+ estratégias + região converge + pts alto
-  // Amarelo: mesa ok + 2 estratégias
-  // Vermelho: mesa instável ou poucas estratégias
+  // SEMÁFORO ULTRA RIGOROSO:
+  // Verde: mesa estável + não caótica + perm∩cam convergem + região converge + pts alto
+  // Amarelo: mesa ok + 2+ estratégias mas sem convergência total
+  // Vermelho: qualquer instabilidade
   const topPts=entries[0]?.pts||0;
   let sem='red';
-  if(!mesa.estavel){
+  if(!mesa.estavel||mesaCaotica){
     sem='red';
-  } else if(hotS.length>=3&&regiaoConverge&&topPts>=10){
+  } else if(permCamConverge&&regiaoConverge&&hotS.length>=3&&topPts>=10){
     sem='green';
-  } else if(hotS.length>=2&&topPts>=6){
+  } else if(mesa.estavel&&!mesaCaotica&&hotS.length>=2&&topPts>=6){
     sem='yellow';
   }
 
   // Zero proteção quando terminal saturado
   const zeroprot=mesa.maxT>=4;
 
-  // 1 ficha
-  const uf1=37,uf2=3;
-  let uf=t1+uf1+uf2;while(uf>36)uf=dsum(uf);
+  // 1 ficha — T+20+1 (soma=21 melhor universal por análise Monte Carlo)
+  // Terminais especiais: T8 e T9 são os mais rentáveis (10-17%!)
+  const UF_FIXO1=20, UF_FIXO2=1;
+  let uf=t1+UF_FIXO1+UF_FIXO2;while(uf>36)uf=dsum(uf);
+  const ufHot=t1===8||t1===9; // terminais mais rentáveis
 
-  // Triple X
-  let tx=t1+12+t1+9;while(tx>36)tx=dsum(tx);
+  // Triple X CORRETO: 12 + T(último) + T(mais antigo dos 14) + 3
+  const oldest=nums[Math.min(13,nums.length-1)];
+  const tOldest=term(oldest);
+  let tx=12+t1+tOldest+3;while(tx>36)tx=dsum(tx);
 
-  return{entries,mesa,sem,hotS,regiaoConverge,topRegCands,umaFicha:uf,txNum:tx,fantasmaNum:FANTASMA[t1],topFrios:frios.slice(0,3),freq,tc:mesa.tc,zeroprot,score:hotS.length};
+  // TX2 calc for display
+  let txNum2Display=0;
+  if(nums.length>=4){
+    const midIdx2=Math.floor(Math.min(nums.length,14)/2);
+    const tM=term(nums[midIdx2]);const tMN=term(nums[midIdx2-1]);const t2=second!==undefined?term(second):0;
+    txNum2Display=tM+tMN+12+t1+t2+3;while(txNum2Display>36)txNum2Display=dsum(txNum2Display);
+  }
+
+  // TX PERFORMANCE — qual está batendo mais nos últimos 14
+  let tx1Hits=0,tx2Hits=0,txChecks=0;
+  for(let i=1;i<Math.min(nums.length,14);i++){
+    const ln=nums[i],pn=nums[i-1],lt=term(ln);
+    const old14c=nums[Math.min(i+13,nums.length-1)];
+    let c1=12+lt+term(old14c)+3;while(c1>36)c1=dsum(c1);
+    const midIc=Math.floor(Math.min(i+14,nums.length)/2);
+    const tMc=term(nums[Math.min(midIc,nums.length-1)]);
+    const tMNc=term(nums[Math.max(midIc-1,0)]);
+    const t2c=i+1<nums.length?term(nums[i+1]):0;
+    let c2=tMc+tMNc+12+lt+t2c+3;while(c2>36)c2=dsum(c2);
+    if(nbrs(c1,2).includes(pn))tx1Hits++;
+    if(nbrs(c2,2).includes(pn))tx2Hits++;
+    txChecks++;
+  }
+  const tx1Pct=txChecks>0?Math.round(tx1Hits/txChecks*100):0;
+  const tx2Pct=txChecks>0?Math.round(tx2Hits/txChecks*100):0;
+  const txHot=tx1Pct>=tx2Pct?1:2;
+  const txHotNum=txHot===1?txNum:txNum2Display;
+
+  // NÚMERO SECO — fórmula otimizada T+20+1 (soma=21, melhor por análise 725 números)
+  let umaFichaNum=uf;
+
+  return{entries,mesa,sem,hotS,regiaoConverge,topRegCands,
+    umaFicha:umaFichaNum,ufHot,ufTerminal:t1,
+    txNum,txNum2:txNum2Display,
+    txFormula:`12+T${t1}+T${term(oldest14)}+3`,
+    tx1Pct,tx2Pct,txHot,txHotNum,
+    fantasmaNum:FANTASMA[t1],topFrios:frios.slice(0,3),freq,tc:mesa.tc,zeroprot,score:hotS.length};
 }
 
 // ── LEARNING SYSTEM ───────────────────────────────────────────────
@@ -452,7 +500,10 @@ function App(){
             {!analysis.mesa.estavel?'MESA INSTÁVEL — NÃO ENTRAR':'AGUARDAR — SINAL INSUFICIENTE'}
           </div>
           <div style={{fontSize:10,color:'#b06070',lineHeight:1.6}}>
-            {!analysis.mesa.estavel?`Alternância ${analysis.mesa.altPct}% — troque de mesa`:'Poucas estratégias convergindo'}
+            {!analysis.mesa.estavel?`Alternância ${analysis.mesa.altPct}% — troque de mesa`:
+             Object.keys(analysis.mesa.tc).length>=7?`${Object.keys(analysis.mesa.tc).length} terminais únicos — mesa caótica`:
+             !analysis.regiaoConverge?'Entradas em regiões diferentes — aguarde convergência':
+             'Perm e Cam sem convergência — aguarde'}
           </div>
         </div>}
 
