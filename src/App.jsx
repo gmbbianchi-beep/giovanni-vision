@@ -67,12 +67,12 @@ function mesaCheck(nums){
   const topR=Object.entries(rc).sort((a,b)=>b[1]-a[1])[0];
   // Score de estabilidade
   let score=0;
-  if(altPct<0.6)score+=2; // baixa alternância
-  if(altPct<0.5)score+=1;
+  if(altPct<0.65)score+=2; // baixa alternância
+  if(altPct<0.55)score+=1;
   if(maxT>=3)score+=2; // terminal dominante
   if(maxT>=4)score+=1;
-  if(topR[1]>=5)score+=2; // região dominante
-  const estavel=score>=4&&altPct<0.7;
+  if(topR[1]>=4)score+=2; // região dominante
+  const estavel=score>=3&&altPct<0.75; // menos restritivo
   return{estavel,score,altPct:Math.round(altPct*100),dominante:`T${topT[0]}(${topT[1]}x)`,regiao:topR[0],maxT,tc,rc,msg:estavel?'Mesa estável':'Mesa instável'};
 }
 
@@ -124,6 +124,13 @@ function analyze(nums,weights,mode){
 
   // CICLO DE TERMINAIS
   if(CICLOS[t1])CICLOS[t1].forEach(tc2=>[tc2,tc2+10,tc2+20,tc2+30].filter(x=>x<=36&&x>0).forEach(n=>add(n,2,'ciclo',`Ciclo T${t1}→T${tc2}`)));
+
+  // ESTRATÉGIA TERMINAL 1V — quando não sabe qual do terminal vai cair
+  // Ex: terminal 6 dominante → cobre 6,16,26,36 cada um com 1V
+  const domTerminal=Object.entries(mesa.tc).sort((a,b)=>b[1]-a[1])[0];
+  const tDom=parseInt(domTerminal[0]);
+  const tDomCount=domTerminal[1];
+  const terminalNums=[tDom,tDom+10,tDom+20,tDom+30].filter(x=>x<=36&&x>0);
 
   // FANTASMA
   if(FANTASMA[t1]!==undefined)add(FANTASMA[t1],3,'fantasma',`Fantasma T${t1}`);
@@ -189,30 +196,41 @@ function analyze(nums,weights,mode){
   if(allKeys.includes('ciclo'))hotS.push('Ciclo');
   if(Object.values(freq).some(v=>v>=2))hotS.push('Repetição');
 
-  // CONVERGÊNCIA REAL: Perm e Cam precisam apontar para o MESMO número
-  const permNums=new Set((PERM[last]||[]).map(n=>n));
-  const camNums=new Set([cam,cam+10,cam+20,cam+30].filter(x=>x<=36));
-  const permCamConverge=[...permNums].some(n=>camNums.has(n)||term(n)===cam);
+  // CONVERGÊNCIA: Perm e Cam na mesma REGIÃO (não precisa ser mesmo número)
+  const TIER_SET=new Set([5,8,10,11,13,16,23,24,27,30,33,36]);
+  const VOIS_SET=new Set([0,2,3,4,7,12,15,18,19,21,22,25,26,28,29,32,35]);
+  const getR=n=>n===0?'Z':TIER_SET.has(n)?'T':VOIS_SET.has(n)?'V':'O';
+  const permNums=(PERM[last]||[]);
+  const camNums=[cam,cam+10,cam+20,cam+30].filter(x=>x<=36&&x>0);
+  // Convergência = mesma região OU mesmo terminal
+  const permRegs=new Set(permNums.map(n=>getR(n)));
+  const camRegs=new Set(camNums.map(n=>getR(n)));
+  const permCamConverge=[...permRegs].some(r=>camRegs.has(r))||
+    permNums.some(n=>camNums.some(c=>term(n)===term(c)));
 
   // Terminais únicos — mesa caótica se muitos
   const uniqueTerms=Object.keys(mesa.tc).length;
-  const mesaCaotica=uniqueTerms>=7;
+  const mesaCaotica=uniqueTerms>=8; // aumentei de 7 para 8
 
-  // Região converge
+  // Região converge nas entradas
   const regiaoConverge=entries.length>=1&&entries.every(e=>e.regiao===entries[0].regiao||e.regiao==='Z');
 
-  // SEMÁFORO ULTRA RIGOROSO:
-  // Verde: mesa estável + não caótica + perm∩cam convergem + região converge + pts alto
-  // Amarelo: mesa ok + 2+ estratégias mas sem convergência total
-  // Vermelho: qualquer instabilidade
+  // SEMÁFORO BALANCEADO:
+  // Verde: mesa estável + não caótica + convergência de região + 3+ estratégias
+  // Amarelo: mesa ok + 2 estratégias
+  // Vermelho: mesa instável ou caótica
   const topPts=entries[0]?.pts||0;
   let sem='red';
-  if(!mesa.estavel||mesaCaotica){
-    sem='red';
-  } else if(permCamConverge&&regiaoConverge&&hotS.length>=3&&topPts>=10){
+  if(mesaCaotica){
+    sem='red'; // só vermelho se realmente caótica
+  } else if(!mesa.estavel){
+    sem='yellow'; // instável mas mostra cautela
+  } else if(permCamConverge&&hotS.length>=3&&topPts>=8){
     sem='green';
-  } else if(mesa.estavel&&!mesaCaotica&&hotS.length>=2&&topPts>=6){
+  } else if(hotS.length>=2&&topPts>=5){
     sem='yellow';
+  } else {
+    sem='yellow'; // sempre mostra pelo menos amarelo com números
   }
 
   // Zero proteção quando terminal saturado
@@ -260,11 +278,15 @@ function analyze(nums,weights,mode){
   // NÚMERO SECO — fórmula otimizada T+20+1 (soma=21, melhor por análise 725 números)
   let umaFichaNum=uf;
 
+  // TX % for display
+  const tx1Hot=tx1Pct>=tx2Pct;
+
   return{entries,mesa,sem,hotS,regiaoConverge,topRegCands,
     umaFicha:umaFichaNum,ufHot,ufTerminal:t1,
     txNum,txNum2:txNum2Display,
     txFormula:`12+T${t1}+T${term(oldest14)}+3`,
-    tx1Pct,tx2Pct,txHot,txHotNum,
+    tx1Pct,tx2Pct,txHot,tx1Hot,
+    terminalNums,tDom,tDomCount,
     fantasmaNum:FANTASMA[t1],topFrios:frios.slice(0,3),freq,tc:mesa.tc,zeroprot,score:hotS.length};
 }
 
@@ -305,6 +327,8 @@ function App(){
   };
 
   const C={bg:'#04080b',panel:'#080f14',p2:'#0c1820',border:'#132030',green:'#00c87a',gold:'#f5a800',red:'#d42035',blue:'#38bdf8',text:'#b8d8f0',dim:'#2e4a60',white:'#e8f5ff'};
+  const WH=[0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
+  const nbrs=(n,c)=>{const p=WH.indexOf(n);if(p<0)return[];return Array.from({length:c*2+1},(_,i)=>WH[(p-c+i+WH.length)%WH.length]);};
   const S={s:{c:C.green,bg:'rgba(0,200,122,0.12)',b:'rgba(0,200,122,0.3)',l:'FORTE'},m:{c:C.gold,bg:'rgba(245,168,0,0.12)',b:'rgba(245,168,0,0.3)',l:'MÉDIO'},n:{c:C.red,bg:'rgba(212,32,53,0.12)',b:'rgba(212,32,53,0.3)',l:'FRACO'}};
 
   const run=useCallback((nums,w,m)=>{
@@ -347,8 +371,95 @@ function App(){
     boxShadow:main?`0 0 12px ${S[str].c}30`:'none'});
 
   return(<div style={{background:C.bg,minHeight:'100vh',color:C.text,fontFamily:"'Courier New',monospace",paddingBottom:50}}>
+    {/* ── VISUAL BACKGROUND ── */}
+    <div style={{position:'fixed',inset:0,pointerEvents:'none',zIndex:0,overflow:'hidden'}}>
+      {/* NYC Skyline SVG */}
+      <svg style={{position:'absolute',bottom:0,left:0,width:'100%',opacity:0.07}} viewBox="0 0 800 300" preserveAspectRatio="xMidYMax meet">
+        <rect x="0" y="150" width="800" height="150" fill="#00c87a"/>
+        {/* buildings */}
+        <rect x="10" y="80" width="40" height="220" fill="#e8f5ff"/>
+        <rect x="55" y="110" width="25" height="190" fill="#e8f5ff"/>
+        <rect x="85" y="60" width="35" height="240" fill="#e8f5ff"/>
+        <rect x="88" y="40" width="8" height="25" fill="#e8f5ff"/>
+        <rect x="125" y="90" width="50" height="210" fill="#e8f5ff"/>
+        <rect x="180" y="50" width="60" height="250" fill="#e8f5ff"/>
+        <rect x="183" y="20" width="12" height="35" fill="#e8f5ff"/>
+        <rect x="245" y="100" width="30" height="200" fill="#e8f5ff"/>
+        <rect x="280" y="70" width="45" height="230" fill="#e8f5ff"/>
+        <rect x="330" y="30" width="55" height="270" fill="#e8f5ff"/>
+        <rect x="355" y="0" width="8" height="35" fill="#e8f5ff"/>
+        <rect x="390" y="85" width="40" height="215" fill="#e8f5ff"/>
+        <rect x="435" y="55" width="65" height="245" fill="#e8f5ff"/>
+        <rect x="505" y="95" width="35" height="205" fill="#e8f5ff"/>
+        <rect x="545" y="40" width="50" height="260" fill="#e8f5ff"/>
+        <rect x="600" y="75" width="40" height="225" fill="#e8f5ff"/>
+        <rect x="645" y="110" width="30" height="190" fill="#e8f5ff"/>
+        <rect x="680" y="60" width="55" height="240" fill="#e8f5ff"/>
+        <rect x="740" y="90" width="35" height="210" fill="#e8f5ff"/>
+        <rect x="778" y="120" width="22" height="180" fill="#e8f5ff"/>
+        {/* windows */}
+        {[...Array(20)].map((_,i)=><rect key={i} x={15+i*38} y={100+Math.sin(i)*20} width="4" height="4" fill="#f5a800" opacity="0.8"/>)}
+        {[...Array(15)].map((_,i)=><rect key={i} x={20+i*50} y={130+Math.cos(i)*15} width="3" height="3" fill="#00c87a" opacity="0.6"/>)}
+      </svg>
+
+      {/* Roulette wheel silhouette */}
+      <div style={{position:'absolute',top:-80,right:-80,width:300,height:300,borderRadius:'50%',border:'2px solid rgba(0,200,122,0.08)',animation:'spin-slow 30s linear infinite'}}>
+        <div style={{position:'absolute',inset:20,borderRadius:'50%',border:'1px solid rgba(245,168,0,0.06)'}}/>
+        <div style={{position:'absolute',inset:40,borderRadius:'50%',border:'1px solid rgba(0,200,122,0.05)'}}/>
+        <div style={{position:'absolute',inset:60,borderRadius:'50%',border:'1px solid rgba(56,189,248,0.04)'}}/>
+        {[...Array(37)].map((_,i)=>(
+          <div key={i} style={{position:'absolute',top:'50%',left:'50%',width:1,height:'50%',background:'rgba(0,200,122,0.06)',transformOrigin:'0 0',transform:`rotate(${i*9.73}deg)`}}/>
+        ))}
+      </div>
+
+      {/* Second wheel bottom left */}
+      <div style={{position:'absolute',bottom:-100,left:-100,width:280,height:280,borderRadius:'50%',border:'1px solid rgba(245,168,0,0.06)',animation:'spin-slow 40s linear infinite reverse'}}>
+        <div style={{position:'absolute',inset:30,borderRadius:'50%',border:'1px solid rgba(212,32,53,0.05)'}}/>
+        {[...Array(18)].map((_,i)=>(
+          <div key={i} style={{position:'absolute',top:'50%',left:'50%',width:1,height:'50%',background:'rgba(245,168,0,0.05)',transformOrigin:'0 0',transform:`rotate(${i*20}deg)`}}/>
+        ))}
+      </div>
+
+      {/* Floating numbers */}
+      {[0,7,14,21,28,35,3,17,32].map((n,i)=>(
+        <div key={i} style={{
+          position:'absolute',
+          left:`${8+i*11}%`,
+          top:`${20+Math.sin(i*0.7)*40}%`,
+          fontSize:i%3===0?28:i%3===1?20:14,
+          fontWeight:900,
+          color:`rgba(${i%2===0?'0,200,122':'245,168,0'},0.04)`,
+          fontFamily:'monospace',
+          animation:`float ${3+i*0.4}s ease-in-out infinite`,
+          animationDelay:`${i*0.3}s`,
+          userSelect:'none'
+        }}>{n}</div>
+      ))}
+
+      {/* Grid lines */}
+      <div style={{position:'absolute',inset:0,backgroundImage:'linear-gradient(rgba(0,200,122,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(0,200,122,0.025) 1px,transparent 1px)',backgroundSize:'40px 40px'}}/>
+
+      {/* Scanlines */}
+      <div style={{position:'absolute',inset:0,background:'repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.03) 2px,rgba(0,0,0,0.03) 4px)'}}/>
+
+      {/* Glow top */}
+      <div style={{position:'absolute',top:0,left:'50%',transform:'translateX(-50%)',width:'60%',height:200,background:'radial-gradient(ellipse,rgba(0,200,122,0.06) 0%,transparent 70%)',animation:'pulse-glow 4s ease-in-out infinite'}}/>
+
+      {/* Glow bottom */}
+      <div style={{position:'absolute',bottom:0,right:0,width:300,height:300,background:'radial-gradient(ellipse,rgba(245,168,0,0.04) 0%,transparent 70%)'}}/>
+    </div>
+
+    {/* Ticker tape */}
+    <div style={{position:'fixed',top:0,left:0,right:0,height:20,background:'rgba(4,8,11,0.95)',borderBottom:'1px solid rgba(0,200,122,0.1)',overflow:'hidden',zIndex:100,display:'flex',alignItems:'center'}}>
+      <div style={{display:'flex',gap:0,animation:'ticker 20s linear infinite',whiteSpace:'nowrap'}}>
+        {['GIOVANNI VISION','●','REVOLUTION','●','v6.0 PRO','●','ANÁLISE EM TEMPO REAL','●','JOGUE COM RESPONSABILIDADE','●','GIOVANNI VISION','●','REVOLUTION','●','v6.0 PRO','●','ANÁLISE EM TEMPO REAL','●'].map((t,i)=>(
+          <span key={i} style={{fontSize:8,color:i%2===0?'rgba(0,200,122,0.5)':'rgba(245,168,0,0.4)',letterSpacing:2,padding:'0 12px'}}>{t}</span>
+        ))}
+      </div>
+    </div>
+
     <div style={{position:'fixed',inset:0,background:'repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.04) 2px,rgba(0,0,0,0.04) 4px)',pointerEvents:'none',zIndex:9999}}/>
-    <div style={{maxWidth:430,margin:'0 auto',padding:'0 12px',position:'relative',zIndex:1}}>
+    <div style={{maxWidth:430,margin:'0 auto',padding:'20px 12px 0',position:'relative',zIndex:1}}>
 
       {/* HEADER */}
       <div style={{padding:'12px 0 10px',borderBottom:`1px solid ${C.border}`,marginBottom:10,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
@@ -521,8 +632,8 @@ function App(){
           <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>{analysis.hotS.map((s,i)=><span key={i} style={{fontSize:9,padding:'2px 6px',background:'rgba(0,200,122,0.1)',color:C.green,border:'1px solid rgba(0,200,122,0.25)',borderRadius:4}}>{s}</span>)}</div>
         </div>}
 
-        {/* ENTRADAS — máx 2 como Prodígio */}
-        {(analysis.sem==='green'||analysis.sem==='yellow')&&analysis.mesa.estavel&&<>
+        {/* ENTRADAS — sempre mostra TX e 1 ficha, entradas principais só com sinal */}
+        {(analysis.sem==='green'||analysis.sem==='yellow')&&<>
           {analysis.entries.map((e,i)=>(<div key={i} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:10,padding:10,marginBottom:7,position:'relative',overflow:'hidden'}}>
             <div style={{position:'absolute',left:0,top:0,bottom:0,width:3,background:S[e.str].c}}/>
             <div style={{display:'flex',justifyContent:'space-between',marginBottom:7}}>
@@ -730,6 +841,15 @@ function App(){
         PERM · CAM · CAMDUPLA · ESPELHO · FANTASMA · FRIO · DISTÂNCIA
       </div>
     </div>
-    <style>{`*{box-sizing:border-box}input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}::-webkit-scrollbar{display:none}input::placeholder{color:#2e4a60}`}</style>
+    <style>{`
+      *{box-sizing:border-box}
+      input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
+      ::-webkit-scrollbar{display:none}
+      input::placeholder{color:#2e4a60}
+      @keyframes float{0%,100%{transform:translateY(0px)}50%{transform:translateY(-8px)}}
+      @keyframes spin-slow{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+      @keyframes pulse-glow{0%,100%{opacity:0.15}50%{opacity:0.35}}
+      @keyframes ticker{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+    `}</style>
   </div>);
 }
