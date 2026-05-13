@@ -252,6 +252,7 @@ function App(){
   const[strats,setStrats]=useState(null);
   const[analysis,setAnalysis]=useState(null);
   const[confirm,setConfirm]=useState(false);
+  const[editIdx,setEditIdx]=useState(null); // index being edited
 
   const C={bg:'#04080b',panel:'#080f14',p2:'#0c1820',border:'#132030',green:'#00c87a',gold:'#f5a800',red:'#d42035',blue:'#38bdf8',text:'#b8d8f0',dim:'#2e4a60',white:'#e8f5ff'};
   const S={s:{c:C.green,bg:'rgba(0,200,122,0.12)',b:'rgba(0,200,122,0.3)',l:'FORTE'},m:{c:C.gold,bg:'rgba(245,168,0,0.12)',b:'rgba(245,168,0,0.3)',l:'MÉDIO'},n:{c:C.red,bg:'rgba(212,32,53,0.12)',b:'rgba(212,32,53,0.3)',l:'FRACO'}};
@@ -264,12 +265,22 @@ function App(){
   },[weights,mode]);
 
   const addN=(n)=>{if(n<0||n>36)return;const u=[n,...tl].slice(0,50);setTl(u);run(u);setRetry(0);setMissed(null);};
+  const delLast=()=>{if(tl.length===0)return;const u=tl.slice(1);setTl(u);if(u.length>=3)run(u);else{setAnalysis(null);setStrats(null);setOpt(null);}};
+  const editNum=(idx,n)=>{if(n<0||n>36)return;const u=[...tl];u[idx]=n;setTl(u);if(u.length>=3)run(u);setEditIdx(null);};
   const addInput=()=>{const n=parseInt(newN);if(isNaN(n)||n<0||n>36)return;addN(n);setNewN('');};
   const naoBateu=()=>{const n=parseInt(newN);if(retry===0){if(!isNaN(n)&&n>=0&&n<=36)setMissed(n);setRetry(1);setNewN('');}else if(retry===1){if(!isNaN(n)&&n>=0&&n<=36)setMissed(n);setRetry(2);setNewN('');}};
   const handleFB=(r)=>{const nw=updateW(weights,lastKeys,r);setWeights(nw);const ns={...stats,total:stats.total+1};if(r==='first')ns.first=(stats.first||0)+1;if(r==='second')ns.second=(stats.second||0)+1;if(r==='miss')ns.miss=(stats.miss||0)+1;saveStats(ns);setStats(ns);setShowFB(false);};
   const switchMode=(m)=>{setMode(m);if(tl.length>=3)run(tl,weights,m);};
 
-  const ball=(n,i)=><div key={i} style={{width:26,height:26,borderRadius:'50%',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:'bold',background:n===0?'#082015':RED.has(n)?'#4a0a14':'#111',color:n===0?C.green:RED.has(n)?'#ff9090':'#777',border:`1px solid ${i===0?C.gold:n===0?'#1a5030':RED.has(n)?'#8a1525':'#222'}`}}>{n}</div>;
+  const ball=(n,i)=>(
+    <div key={i} onClick={()=>setEditIdx(editIdx===i?null:i)}
+      style={{width:26,height:26,borderRadius:'50%',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:'bold',cursor:'pointer',
+        background:editIdx===i?'rgba(56,189,248,0.3)':n===0?'#082015':RED.has(n)?'#4a0a14':'#111',
+        color:editIdx===i?'#fff':n===0?C.green:RED.has(n)?'#ff9090':'#777',
+        border:`2px solid ${editIdx===i?C.blue:i===0?C.gold:n===0?'#1a5030':RED.has(n)?'#8a1525':'#222'}`,
+        boxShadow:editIdx===i?`0 0 8px ${C.blue}`:'none'
+      }}>{n}</div>
+  );
   const bigBall=(n,main,str)=>({width:36,height:36,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:'bold',flexShrink:0,background:main?S[str].bg:n===0?'#082015':RED.has(n)?'#3a0a10':'#0f0f0f',color:main?S[str].c:n===0?C.green:RED.has(n)?'#ff9090':'#666',border:`1px solid ${main?S[str].b:n===0?'#1a5030':RED.has(n)?'#6a1520':'#1a1a1a'}`,boxShadow:main?`0 0 12px ${S[str].c}30`:'none'});
 
   const semColor=analysis?.sem==='green'?C.green:analysis?.sem==='yellow'?C.gold:C.red;
@@ -306,6 +317,22 @@ function App(){
         </div>
       </div>
 
+      {/* EDIT PANEL */}
+      {editIdx!==null&&<div style={{background:'rgba(56,189,248,0.08)',border:`1px solid ${C.blue}`,borderRadius:10,padding:10,marginBottom:8}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:7}}>
+          <div style={{fontSize:10,color:C.blue,fontWeight:900}}>✏️ Substituir posição {editIdx+1} — atual: <strong style={{color:C.white}}>{tl[editIdx]}</strong></div>
+          <button onClick={()=>{const u=[...tl];u.splice(editIdx,1);setTl(u);if(u.length>=3)run(u);else{setAnalysis(null);setStrats(null);setOpt(null);}setEditIdx(null);}} style={{fontSize:9,padding:'3px 8px',background:'rgba(212,32,53,0.15)',border:`1px solid ${C.red}`,borderRadius:5,color:C.red,cursor:'pointer'}}>🗑 APAGAR</button>
+        </div>
+        <div style={{fontSize:9,color:C.dim,marginBottom:6}}>Toque no novo número:</div>
+        <button onClick={()=>editNum(editIdx,0)} style={{display:'block',width:'100%',padding:'6px',background:'#082015',border:'1px solid #1a5030',borderRadius:6,color:C.green,fontFamily:'monospace',fontSize:13,fontWeight:'bold',cursor:'pointer',marginBottom:5,letterSpacing:3}}>— 0 —</button>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(9,1fr)',gap:4}}>
+          {Array.from({length:36},(_,i)=>i+1).map(n=>(
+            <button key={n} onClick={()=>editNum(editIdx,n)} style={{height:36,borderRadius:6,fontFamily:'monospace',fontSize:12,fontWeight:'bold',cursor:'pointer',border:'none',background:RED.has(n)?'#3a0a10':'#101010',color:RED.has(n)?'#ff8090':'#777'}}>{n}</button>
+          ))}
+        </div>
+        <button onClick={()=>setEditIdx(null)} style={{width:'100%',marginTop:6,padding:'5px',background:'transparent',border:`1px solid ${C.dim}`,borderRadius:5,color:C.dim,fontSize:9,cursor:'pointer'}}>CANCELAR</button>
+      </div>}
+
       {/* INPUT */}
       <div style={{marginBottom:8}}>
         <div style={{display:'flex',gap:6,marginBottom:retry>0?6:0}}>
@@ -329,10 +356,10 @@ function App(){
       {/* GRID */}
       <div style={{background:C.panel,border:`1px solid ${C.border}`,borderRadius:10,padding:10,marginBottom:10}}>
         <div style={{fontSize:8,color:C.dim,letterSpacing:2,marginBottom:7,textAlign:'center'}}>TOQUE PARA ADICIONAR</div>
-        <button onClick={()=>addN(0)} style={{display:'block',width:'100%',padding:'6px',background:'#082015',border:'1px solid #1a5030',borderRadius:6,color:C.green,fontFamily:'monospace',fontSize:13,fontWeight:'bold',cursor:'pointer',marginBottom:6,letterSpacing:3}}>— 0 —</button>
-        <div style={{display:'grid',gridTemplateColumns:'repeat(9,1fr)',gap:4}}>
+        <button onClick={()=>addN(0)} style={{display:'block',width:'100%',padding:'9px',background:'#082015',border:'1px solid #1a5030',borderRadius:7,color:C.green,fontFamily:'monospace',fontSize:15,fontWeight:'bold',cursor:'pointer',marginBottom:7,letterSpacing:3}}>— 0 —</button>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(9,1fr)',gap:5}}>
           {Array.from({length:36},(_,i)=>i+1).map(n=>(
-            <button key={n} onClick={()=>addN(n)} style={{height:34,borderRadius:6,fontFamily:'monospace',fontSize:12,fontWeight:'bold',cursor:'pointer',border:'none',background:RED.has(n)?'#3a0a10':'#101010',color:RED.has(n)?'#ff8090':'#777'}}>{n}</button>
+            <button key={n} onClick={()=>addN(n)} style={{height:42,borderRadius:7,fontFamily:'monospace',fontSize:14,fontWeight:'bold',cursor:'pointer',border:'none',background:RED.has(n)?'#3a0a10':'#101010',color:RED.has(n)?'#ff8090':'#777'}}>{n}</button>
           ))}
         </div>
         <button onClick={()=>{setTl([]);setAnalysis(null);setOpt(null);setStrats(null);setRetry(0);}} style={{width:'100%',marginTop:7,padding:'5px',background:'transparent',border:`1px solid ${C.border}`,borderRadius:5,color:C.dim,fontSize:10,cursor:'pointer'}}>⌫ LIMPAR</button>
