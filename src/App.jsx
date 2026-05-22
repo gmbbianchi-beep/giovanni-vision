@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
+import { analyze } from "./engine/decisionEngine";
 
 const SENHA = "Forra01";
 
