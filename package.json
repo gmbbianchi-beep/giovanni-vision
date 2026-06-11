@@ -19,9 +19,7 @@
     "date-fns": "latest",
     "clsx": "latest",
     "tailwind-merge": "latest",
-    "class-variance-authority": "latest",
-    "tailwindcss": "latest",
-    "@tailwindcss/vite": "latest"
+    "class-variance-authority": "latest"
   },
   "devDependencies": {}
 }
